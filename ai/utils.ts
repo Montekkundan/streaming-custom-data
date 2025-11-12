@@ -47,10 +47,20 @@ export function makeResponseHandler(
           )
         );
         const evt = event as
-          | { totalUsage?: { totalTokens?: number } }
+          | {
+              totalUsage?: {
+                totalTokens?: number;
+                inputTokens?: number;
+                outputTokens?: number;
+                [key: string]: unknown;
+              };
+            }
           | undefined;
         controller.enqueue(
-          makeMessageMetadata({ totalTokens: evt?.totalUsage?.totalTokens })
+          makeMessageMetadata({
+            totalUsage: evt?.totalUsage,
+            totalTokens: evt?.totalUsage?.totalTokens,
+          })
         );
       } catch (err: unknown) {
         // eslint-disable-next-line no-console
@@ -75,7 +85,7 @@ export function enqueueProgress(
 
 export function writeSuggestionsChunk(
   writer: UIMessageStreamWriter,
-  suggestions: Array<{ text: string; action: string }>,
+  suggestions: Array<{ text: string }>,
   options: { transient?: boolean } = {}
 ) {
   writer.write({
@@ -87,7 +97,7 @@ export function writeSuggestionsChunk(
 
 export function enqueueSuggestions(
   controller: ReadableStreamDefaultController<UIMessageChunk>,
-  suggestions: Array<{ text: string; action: string }>,
+  suggestions: Array<{ text: string }>,
   options: { transient?: boolean } = {}
 ) {
   controller.enqueue({
@@ -161,21 +171,21 @@ export function makeId(prefix = "id") {
 export async function generateSuggestedActions(
   model: unknown,
   convoMessages: UIMessage[]
-): Promise<Array<{ text: string; action: string }>> {
+): Promise<Array<{ text: string }>> {
   try {
     const schema = z.object({
-      actions: z.array(z.object({ text: z.string(), action: z.string() })),
+      actions: z.array(z.object({ text: z.string() })),
     });
     const resp = await generateObject({
       model: model as unknown as never,
       system:
-        "You are an assistant. Based on the conversation context and the last response, suggest 3-4 relevant follow-up actions or questions. Return a JSON object with an `actions` array.",
+        "You are an assistant. Based on the conversation context and the last response, suggest 3-4 relevant follow-up actions or questions that the user might ask. Return a JSON object with an `actions` array.",
       messages: convertToModelMessages(convoMessages.slice(-1)),
       maxOutputTokens: 500,
       schema,
     });
     const obj = resp.object as unknown as {
-      actions?: Array<{ text: string; action: string }>;
+      actions?: Array<{ text: string }>;
     };
     return Array.isArray(obj?.actions) ? obj.actions : [];
   } catch (err) {

@@ -27,7 +27,6 @@ export async function POST(req: Request) {
     apiKey: apiKey || process.env.AI_GATEWAY_API_KEY,
   });
 
-  // model-backed city extractor
   const city =
     (await extractCityFromMessages(gateway("openai/gpt-4o"), messages)) ??
     "San Francisco";
@@ -36,8 +35,11 @@ export async function POST(req: Request) {
     null;
   const responseHandler = makeResponseHandler(() => streamController);
 
+  const llmModelId = "openai/gpt-4o-mini";
+  const llmModel = gateway(llmModelId);
+
   const llmResult = streamText({
-    model: gateway("openai/gpt-4o-mini"),
+    model: llmModel,
     messages: convertToModelMessages(messages),
     onFinish: responseHandler.onFinish,
   });
@@ -79,7 +81,6 @@ export async function POST(req: Request) {
     },
   });
 
-  // helper: forward llm tokens and inject message-metadata on 'start'
   async function forwardLlmTokens(
     controller: ReadableStreamDefaultController<UIMessageChunk>,
     llm: ReturnType<typeof streamText>
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
       if ((chunk as { type?: string }).type === "start") {
         controller.enqueue({
           type: "message-metadata",
-          messageMetadata: { createdAt: Date.now(), model: "gpt-4o" },
+          messageMetadata: { createdAt: Date.now(), model: llmModelId },
         } as UIMessageChunk);
       }
     }

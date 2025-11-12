@@ -17,7 +17,6 @@ import {
 } from "@/components/ai-elements/message";
 import {
   PromptInput,
-  PromptInputActionMenu,
   PromptInputBody,
   PromptInputFooter,
   type PromptInputMessage,
@@ -25,7 +24,14 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
+import {
+  Source,
+  Sources,
+  SourcesContent,
+  SourcesTrigger,
+} from "@/components/ai-elements/sources";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
+import { ModelPopover } from "@/components/model-popover";
 import { Settings } from "@/components/settings";
 
 const suggestions = [
@@ -37,7 +43,7 @@ const suggestions = [
 export default function Chat() {
   const [input, setInput] = useState("");
   const [dynamicSuggestions, setDynamicSuggestions] = useState<
-    Array<{ text: string; action: string }>
+    Array<{ text: string }>
   >([]);
   const [transientNotification, setTransientNotification] = useState<
     string | null
@@ -70,9 +76,7 @@ export default function Chat() {
       },
     });
 
-  function parseSuggestions(
-    candidate: unknown
-  ): { text: string; action: string }[] {
+  function parseSuggestions(candidate: unknown): { text: string }[] {
     if (!Array.isArray(candidate)) {
       return [];
     }
@@ -82,12 +86,12 @@ export default function Chat() {
           return null;
         }
         const obj = it as Record<string, unknown>;
-        if (typeof obj.text === "string" && typeof obj.action === "string") {
-          return { text: obj.text, action: obj.action };
+        if (typeof obj.text === "string") {
+          return { text: obj.text };
         }
         return null;
       })
-      .filter(Boolean) as { text: string; action: string }[];
+      .filter(Boolean) as { text: string }[];
   }
 
   const handleSubmit = (message: PromptInputMessage) => {
@@ -206,26 +210,44 @@ export default function Chat() {
                             </MessageContent>
                           </Message>
                         );
-                      case "source-url":
-                        return (
-                          <Message
-                            from={message.role}
-                            key={`${message.id}-src-${i}`}
-                          >
-                            <MessageContent>
-                              <div className="text-gray-700 text-sm">
-                                Source:{" "}
-                                <a
-                                  href={part.url}
-                                  rel="noopener noreferrer"
-                                  target="_blank"
-                                >
-                                  {part.title ?? part.url}
-                                </a>
-                              </div>
-                            </MessageContent>
-                          </Message>
+                      case "source-url": {
+                        const sourceParts = message.parts.filter(
+                          (p) =>
+                            (p as Record<string, unknown>).type === "source-url"
                         );
+                        const firstSourceIndex = message.parts.findIndex(
+                          (p) =>
+                            (p as Record<string, unknown>).type === "source-url"
+                        );
+
+                        if (i !== firstSourceIndex) {
+                          return null;
+                        }
+
+                        return (
+                          <Sources key={`${message.id}-sources`}>
+                            <SourcesTrigger count={sourceParts.length} />
+                            <SourcesContent
+                              key={`${message.id}-sources-content`}
+                            >
+                              {sourceParts.map((srcPart, srcIdx) => {
+                                const url = (srcPart as Record<string, unknown>)
+                                  .url;
+                                if (typeof url !== "string") {
+                                  return null;
+                                }
+                                return (
+                                  <Source
+                                    href={url}
+                                    key={`${message.id}-source-${srcIdx}`}
+                                    title={url}
+                                  />
+                                );
+                              })}
+                            </SourcesContent>
+                          </Sources>
+                        );
+                      }
                       default:
                         return null;
                     }
@@ -252,7 +274,7 @@ export default function Chat() {
                     );
                     if (ds) {
                       sendMessage(
-                        { text: ds.action },
+                        { text: ds.text },
                         {
                           body: {
                             apiKey:
@@ -283,7 +305,7 @@ export default function Chat() {
               </PromptInputBody>
               <PromptInputFooter>
                 <PromptInputTools>
-                  <PromptInputActionMenu />
+                  <ModelPopover messages={messages} />
                 </PromptInputTools>
                 <PromptInputSubmit
                   disabled={!(input || status)}
